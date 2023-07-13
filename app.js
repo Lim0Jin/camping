@@ -1,3 +1,7 @@
+if (process.env.NODE_ENV !== "production") {
+  require('dotenv').config();
+}
+
 const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
@@ -10,14 +14,22 @@ const methodOverride = require('method-override');
 const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const User = require('./models/user');
+const helmet = require('helmet');
+
+const mongoSanitize = require('express-mongo-sanitize');
 
 const userRoutes = require('./routes/users');
 const campgrounds = require('./routes/campgrounds');
 const review = require('./routes/review');
+const MongoDBStore = require('connect-mongo');
+const MongoStore = require('connect-mongo');
 
+// const dbUrl = process.env.DB_URL
+const dbUrl = process.env.DB_URL || 'mongodb://127.0.0.1:27017/yelp-camp';
 
 //db 생성 이름은 yelp-camp
-mongoose.connect('mongodb://127.0.0.1:27017/yelp-camp');
+// 'mongodb://127.0.0.1:27017/yelp-camp'
+mongoose.connect(dbUrl);
 
 
 //오류를 확인하고 오류없이 제대로 열렸다면 연결되었다는 문구를 출력
@@ -37,14 +49,35 @@ app.use(express.urlencoded({ extended: true }));
 //POST라우트로 put, Delete, Patch라우트를 등록할수있음
 app.use(methodOverride('_method'));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(mongoSanitize({
+  replaceWith: '_',
+}),)
+
+const secret = prcoess.env.SECRET || 'thisshouldbeabettersecret!';
+
+//mongodb에 세션 저장
+const store = MongoStore.create({
+  mongoUrl: dbUrl,
+  secret,
+  touchAfter: 24 * 60 * 60,
+});
+
+store.on('error', function (e) {
+  console.log("SESSION STORE ERROR", e)
+})
 
 //세션 미들웨어를 쓰면서 쿠키를 자동으로 보냄
 const sessionConfig = {
-  secret: 'thisshouldbeabettersecret!',
+  store,
+  name: 'session',
+  secret,
   resave: false,
   saveUninitialized: true,
   cookie: {
+    //http를 통해서만 엑세스 할수있다
     httpOnly: true,
+    //https를 통해서 변경 및 구성되도록 함
+    // secure: true,
     //쿠키 만료 기한 설정
     expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
     maxAge: 1000 * 60 * 60 * 24 * 7
@@ -53,6 +86,59 @@ const sessionConfig = {
 
 app.use(session(sessionConfig))
 app.use(flash());
+app.use(helmet());
+
+const scriptSrcUrls = [
+  "https://stackpath.bootstrapcdn.com/",
+  "https://api.tiles.mapbox.com/",
+  "https://api.mapbox.com/",
+  "https://kit.fontawesome.com/",
+  "https://cdnjs.cloudflare.com/",
+  "https://cdn.jsdelivr.net",
+];
+const styleSrcUrls = [
+  "https://kit-free.fontawesome.com/",
+  "https://stackpath.bootstrapcdn.com/",
+  "https://api.mapbox.com/",
+  "https://api.tiles.mapbox.com/",
+  "https://fonts.googleapis.com/",
+  "https://use.fontawesome.com/",
+  "https://cdn.jsdelivr.net",
+];
+const connectSrcUrls = [
+  "https://api.mapbox.com/",
+  "https://a.tiles.mapbox.com/",
+  "https://b.titles.mapbox.com/",
+  "https://events.mapbox.com/"
+];
+const fontSrcUrls = [];
+
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: {
+      allowOrigins: ['*']
+    },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: [],
+        connectSrc: ["'self'", ...connectSrcUrls],
+        scriptSrc: ["'unsafe-inline'", "'self'", ...scriptSrcUrls],
+        styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls],
+        workerSrc: ["'self'", "blob:"],
+        objectSrc: [],
+        imgSrc: [
+          "'self'",
+          "blob:",
+          "data:",
+          "https://res.cloudinary.com/drhgtjsdj/",
+          "https://images.unsplash.com/",
+        ],
+        fontSrc: ["'self'", ...fontSrcUrls],
+      },
+    }
+  })
+);
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -69,7 +155,7 @@ passport.deserializeUser(User.deserializeUser());
 //키가 success인 플래시를 가져오고 로컬변수에 접근
 //모든 템플릿에 접근 가능
 app.use((req, res, next) => {
-  console.log(req.session);
+  console.log(req.query);
   //로그인 상태 확인 방법 req.user
   res.locals.currentUser = req.user;
   res.locals.success = req.flash('success');
@@ -114,8 +200,9 @@ app.use((err, req, res, next) => {
   res.status(statusCode).render('error', { err })
 })
 
-//서버 3000포트 사용
-app.listen(3000, () => {
-  console.log('Serving on port 3000')
+const port = process.env.PORT || 5000;
+//서버 5000포트 사용
+app.listen(port, () => {
+  console.log('Serving on port 5000')
 })
 

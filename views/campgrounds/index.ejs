@@ -1,14 +1,19 @@
 <% layout('layouts/boilerplate') %>
+<div id="cluster-map"></div>
   <h1>All Campgrounds</h1>
   <div>
     <a href="/campgrounds/new">Add Campground</a>
   </div>
 <!-- 모든 캠핑장 이름 불러오기 a태그로 show페이지 이동 -->
     <% for (let campground of campgrounds) { %>
-      <div class="card" mb-3>
+      <div class="card mb-3" >
         <div class="row">
           <div class="col-md-4">
-            <img class="img-fluid" alt="" src="<%=campground.image%>">
+            <% if(campground.images.length) { %>
+              <img class="img-fluid" alt="" src="<%=campground.images[0].url%>">
+            <% } else {%>
+              <img crossorigin="anonymous" class="img-fluid" alt="" src="https://res.cloudinary.com/drhgtjsdj/image/upload/v1688614503/YelpCamp/bvg9nxobfat6shlv2gok.jpg">
+            <% } %>
           </div>
           <div class="col-md-8">
             <div class="card-body">
@@ -23,3 +28,10 @@
         </div>
       </div>
     <% } %>
+
+    <script>
+      const mapToken = `<%-process.env.MAPBOX_TOKEN%>`;
+      const campgrounds = {features: <%- JSON.stringify(campgrounds) %>};
+    </script>
+
+    <script src="/javascripts/clusterMap.js"></script>
